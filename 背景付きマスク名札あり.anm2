@@ -1,0 +1,141 @@
+--track@whole_size:全体サイズ,-100000,100000,50,1
+--track@whole_posx:全体位置X,-100000,100000,0,1
+--track@whole_posy:全体位置Y,-100000,100000,0,1
+--color@bg_col:背景色,0xf5f5f5
+--track@bg_size:背景サイズ,0,10000,200,1
+--track@bg_posx:背景位置X,-100000,100000,0,1
+--track@bg_posy:背景位置Y,-100000,100000,0,1
+--select@bg_type:背景タイプ=2,背景=1,円=2,四角形=3,三角形=4,五角形=5,六角形=6,星型=7,ハート=8
+--file@path:画像ファイル
+--track@image_size:画像サイズ,0,10000,100,1
+--track@image_posx:画像位置X,-100000,100000,0,1
+--track@image_posy:画像位置Y,-100000,100000,0,1
+--group:装飾,true
+--color@deco_col:装飾色,0xbe0a0a
+--select@deco_type:装飾タイプ=1,装飾なし=1,ストライプ=2
+--track@deco_size:装飾サイズ,-2000,2000,50,1
+--track@deco_pieces:装飾個数,-100,100,3,1
+--track@deco_rotate:装飾角度,-3600,3600,-60,1
+--track@deco_pos:装飾位置,-2000,2000,0,1
+--track@deco_interval:装飾間隔,-2000,2000,0,1
+--track@frame_size:縁取りサイズ,0,500,0,1
+--color@frame_col:縁取り色,0xbe0a0a
+--group
+--group:名札,true
+--font@tag_font:名札のフォント,MS UI Gothic
+--text@tag_txt:名札の文字,
+--color@tag_col:名札文字色,0xbe0a0a
+--track@tag_size:名札サイズ,0,10000,30,1
+--track@tag_posx:名札位置X,-100000,100000,0,1
+--track@tag_posy:名札位置Y,-100000,100000,120,1
+--track@tag_rotate:名札回転,-3600,3600,0,1
+--track@tag_frame_size:名札縁取りサイズ,0,500,0,1
+--color@tag_frame_col:名札縁取り色,0xf5f5f5
+--check@tag_shadow_enable:名札影,0
+--track@tag_shadowx:名札影X,-1000,1000,0,1
+--track@tag_shadowy:名札影Y,-1000,1000,0,1
+--track@tag_shadowdeep:名札影濃さ,0,100,30,1
+--track@tag_shadowdiffusion:名札影拡散,0,500,10,1
+--color@tag_shadow_col:名札影色,0xbe0a0a
+--check@tag_bg_enable:名札背景,0
+--track@tag_bg_sizex:名札背景サイズX,-100000,100000,190,1
+--track@tag_bg_sizey:名札背景サイズY,-100000,100000,60,1
+--track@tag_bg_posx:名札背景位置X,-100000,100000,0,1
+--track@tag_bg_posy:名札背景位置Y,-100000,100000,0,1
+--track@tag_bg_rotate:名札背景回転,-3600,3600,0,1
+--color@tag_bg_col:名札背景色,0x007814
+--group
+
+local bg_names = {[1]="背景",[2]="円",[3]="四角形",[4]="三角形",[5]="五角形",[6]="六角形",[7]="星型",[8]="ハート"}
+local used_bg_type = bg_names[bg_type] or "円"
+
+-- 1. オリジナル画像を一旦退避
+obj.copybuffer("cache:img_source", "obj")
+
+-- 2. 背景図形の描画準備
+obj.load("figure", used_bg_type, bg_col, 300)
+obj.effect("リサイズ", "拡大率", bg_size)
+
+local w,h = obj.getpixel()
+local used_w = w + (math.abs(bg_posx) + math.abs(image_posx) + math.abs(tag_posx) + tag_size + frame_size) * 2
+local used_h = h + (math.abs(bg_posy) + math.abs(image_posy) + math.abs(tag_posy) + tag_size + frame_size) * 2
+
+-- 3. 描画用バッファ設定
+obj.setoption("drawtarget", "tempbuffer", used_w, used_h)
+
+if frame_size >= 1 then
+    obj.effect("縁取り", "サイズ", frame_size, "ぼかし", 5, "縁色", frame_col)
+end
+
+local oz,zoom,alpha,rx,ry = 0,1,1,0,0
+
+-- 背景描画
+obj.draw(bg_posx, bg_posy, oz, zoom, alpha, rx, ry, 0)
+
+-- マスクの相対座標算出（共通で使用）
+local rel_mask_x = bg_posx - image_posx
+local rel_mask_y = bg_posy - image_posy
+
+-- 4. 装飾の描画
+if deco_type == 2 then
+    local interval_base = 100 + deco_interval 
+    
+    -- 装飾のベースとなる図形をロード
+    obj.load("figure", "四角形", deco_col, 300*2)
+    obj.effect("リサイズ", "拡大率", bg_size)
+    -- ここでマスクを適用（背景と同じ位置に合わせるため相対座標は0）
+    obj.effect("マスク", "X", 0, "Y", 0, "回転", -deco_rotate, "サイズ", bg_size*3, "マスクの種類", used_bg_type)
+    obj.draw(bg_posx, bg_posy, oz, zoom, alpha, rx, ry, deco_rotate)
+
+    for i=1, deco_pieces do
+        local target_y = 0
+        if i == 1 then target_y = deco_pos
+        elseif i % 2 == 0 then target_y = (i / 2) * interval_base + deco_pos
+        else target_y = -((i - 1) / 2) * interval_base + deco_pos end
+
+        obj.load("figure", "四角形", 0xffffff, 300*2)
+        obj.effect("斜めクリッピング", "中心X", 0, "中心Y", target_y, "角度", 0, "ぼかし", 1, "幅", math.max(1, deco_size))
+        obj.effect("リサイズ", "拡大率", bg_size)
+        -- ストライプ部分にもマスクを適用
+        obj.effect("マスク", "X", 0, "Y", 0, "回転", -deco_rotate, "サイズ", bg_size*3, "マスクの種類", used_bg_type)
+        obj.draw(bg_posx, bg_posy, oz, zoom, alpha, rx, ry, deco_rotate)
+    end
+end
+
+-- 5. 前面画像の描画とマスク
+if path ~= "" then
+    obj.load("image", path)
+else
+    obj.copybuffer("obj", "cache:img_source")
+end
+obj.effect("リサイズ", "拡大率", image_size)
+
+-- 画像に対するマスク適用
+obj.effect("マスク", "X", rel_mask_x, "Y", rel_mask_y, "回転", 0, "サイズ", bg_size*3, "マスクの種類", used_bg_type)
+
+-- 画像描画
+obj.draw(image_posx, image_posy, oz, zoom, alpha, rx, ry, 0)
+
+-- 6. 名札の描画
+if tag_txt ~= "" then
+    if tag_bg_enable ~= 0 then
+        obj.load("figure", "四角形", tag_bg_col or 0xffffff, 300)
+        obj.effect("リサイズ", "拡大率", tag_size, "X", tag_bg_sizex, "Y", tag_bg_sizey)
+        obj.draw(tag_posx + tag_bg_posx, tag_posy + tag_bg_posy, oz, zoom, alpha, rx, ry, tag_bg_rotate)
+    end
+    obj.setfont(tag_font, tag_size, 0, tag_col)
+    obj.load("text", tag_txt)
+    if tag_frame_size >= 1 then
+        obj.effect("縁取り", "サイズ", tag_frame_size, "ぼかし", 5, "縁色", tag_frame_col)
+    end
+    if tag_shadow_enable ~= 0 then
+        obj.effect("ドロップシャドウ", "X", tag_shadowx, "Y", tag_shadowy, "濃さ", tag_shadowdeep, "拡散", tag_shadowdiffusion, "影色", tag_shadow_col, "影を別オブジェクトで描画", 0)
+    end
+    obj.draw(tag_posx, tag_posy, oz, zoom, alpha, rx, ry, tag_rotate)
+end
+
+-- 7. 結果をメイン画面に出力
+obj.setoption("drawtarget", "framebuffer")
+obj.load("tempbuffer")
+obj.effect("リサイズ", "拡大率", whole_size)
+obj.draw(whole_posx, whole_posy, 0, 1, 1, 0, 0, 0)
